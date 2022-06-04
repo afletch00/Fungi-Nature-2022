@@ -1,0 +1,300 @@
+
+### ALL 162 MILLER SEQUENCES
+
+activate conda environment - conda activate qiime2-2019.10
+
+Directory with sequences- cd /home/afletch/qiime2-miller/All_Miller_Seqs/all_SRA_seqs_Miller
+
+
+Run Cutadapt to remove adapters and filter sequences less than a length of 100nt:
+
+for i in *.fastq.gz;  do name=(`basename "$i" .fastq.gz`);
+  cutadapt -g CTTGGTCATTTAGAGGAAGTAA -m 100 --info-file cutadapt06032020.txt -o $trimmed_{name}.fastq.gz  ${name}.fastq.gz; 
+done
+
+Place trimmed sequences into a cutadapt folder (all_SRA_seqs_Miller_cutadapt)
+
+_________________________________________________________________________________
+
+RUNNING ANALYSIS IN QIIME2
+
+Directory with sequences- 
+
+cd /home/afletch/qiime2-miller/All_Miller_Seqs/all_SRA_seqs_Miller_cutadapt
+
+
+1. Import data (fastq.gz files)-
+
+Open PowerShell prompt inside of the folder where the cutadapt files are
+Type: get-childitem *.gz | foreach {rename-item $_ $_.name.replace("_trimmed","")}
+
+qiime tools import \
+  --type 'SampleData[SequencesWithQuality]' \
+  --input-path /home/afletch/qiime2-miller/All_Miller_Seqs/all_SRA_seqs_Miller_cutadapt \
+  --input-format CasavaOneEightSingleLanePerSampleDirFmt \
+  --output-path all_miller_cutadapt.qza
+
+qiime demux summarize \
+ --i-data all_miller_cutadapt.qza \
+ --o-visualization all_miller_cutadapt.qzv
+
+
+2. Quality filtering: filter at q=19 (PHRED score)- move cutadapt files to a new folder and copy the ref_seqs folder with them.
+
+cd /home/afletch/qiime2-miller/All_Miller_Seqs/Miller_Q19_QIIME
+
+qiime quality-filter q-score \
+ --i-demux all_miller_cutadapt.qza \
+ --p-min-quality 19 \
+ --o-filtered-sequences all_quality19.qza \
+ --o-filter-stats all_quality19-stats.qza
+
+qiime metadata tabulate \
+  --m-input-file all_quality19-stats.qza \
+  --o-visualization all_quality19-stats.qzv
+
+
+3. Derep-
+
+qiime vsearch dereplicate-sequences \
+ --i-sequences all_quality19.qza \
+ --o-dereplicated-table all_derep-table19.qza \
+ --o-dereplicated-sequences all_derep-seqs19.qza
+
+qiime feature-table summarize \
+  --i-table all_derep-table19.qza \
+  --o-visualization all_derep-table19.qzv
+
+
+4. Removing Chimeras- UCHIME UNITE Reference Dataset v7.2
+
+qiime tools import \
+ --type 'FeatureData[Sequence]' \
+ --input-path /home/afletch/qiime2-miller/All_Miller_Seqs/all_SRA_seqs_Miller_cutadapt/ref_seqs/uchime_reference_dataset_28.06.2017.fasta \
+ --output-path /home/afletch/qiime2-miller/All_Miller_Seqs/Miller_Q19_QIIME/all_uchime_reference_dataset_28.06.2017.qza
+
+qiime vsearch uchime-ref \
+ --i-sequences all_derep-seqs19.qza \
+ --i-table all_derep-table19.qza \
+ --i-reference-sequences all_uchime_reference_dataset_28.06.2017.qza \
+ --o-chimeras all_chim19.qza \
+ --o-nonchimeras all_nochim19.qza \
+ --o-stats all_chim-stats19.qza
+
+qiime feature-table filter-features \
+  --i-table all_derep-table19.qza \
+  --m-metadata-file all_nochim19.qza \
+  --p-exclude-ids \
+  --o-filtered-table table_nochim19.qza
+qiime feature-table filter-seqs \
+  --i-data all_derep-seqs19.qza \
+  --m-metadata-file all_nochim19.qza \
+  --p-exclude-ids \
+  --o-filtered-data seqs_nochim19.qza
+qiime feature-table summarize \
+  --i-table table_nochim19.qza \
+  --o-visualization table_nochim19.qzv
+
+
+6. OTU Picking- UNITE QIIME Reference Dataset v7.2(sh_refs_qiime_ver7_97_s_10.10.2017.fasta); clustering at the 97% threshold level:
+Per QIIME2: -"This data is synonymous to using split_libraries*.py commands in QIIME1".
+
+qiime tools import \
+ --type 'FeatureData[Sequence]' \
+ --input-path /home/afletch/qiime2-miller/All_Miller_Seqs/all_SRA_seqs_Miller_cutadapt/ref_seqs/sh_refs_qiime_ver7_97_s_10.10.2017.fasta \
+ --output-path /home/afletch/qiime2-miller/All_Miller_Seqs/Miller_Q19_QIIME/all_sh_refs_qiime_ver7_97_s_10.10.2017.qza
+
+qiime vsearch cluster-features-open-reference \
+  --i-table table_nochim19.qza \
+  --i-sequences seqs_nochim19.qza \
+  --i-reference-sequences all_sh_refs_qiime_ver7_97_s_10.10.2017.qza \
+  --p-perc-identity 0.97 \
+  --o-clustered-table nochim_table-miller19-97.qza \
+  --o-clustered-sequences nochim_rep-seqs-miller19-97.qza \
+  --o-new-reference-sequences nochim_new-ref-seqs-miller19-97.qza
+
+qiime feature-table summarize \
+  --i-table nochim_table-miller19-97.qza \
+  --o-visualization nochim_table-miller19-97.qzv
+
+qiime feature-table tabulate-seqs \
+  --i-data nochim_rep-seqs-miller19-97.qza \
+  --o-visualization nochim_rep-seqs-miller19-97.qzv
+
+
+7. Assign Taxonomy- UNITE TAXONOMY QIIME Reference Dataset v7.2(sh_taxonomy_qiime_ver7_97_s_10.10.2017.txt); identity set to 97% 
+
+qiime tools import \
+  --type 'FeatureData[Taxonomy]' \
+  --input-format HeaderlessTSVTaxonomyFormat \
+  --input-path /home/afletch/qiime2-miller/All_Miller_Seqs/all_SRA_seqs_Miller_cutadapt/ref_seqs/sh_taxonomy_qiime_ver7_97_s_10.10.2017.txt \
+  --output-path /home/afletch/qiime2-miller/All_Miller_Seqs/Miller_Q19_QIIME/all_sh_taxonomy_qiime_ver7_97_s_10.10.2017.qza
+
+qiime feature-classifier classify-consensus-blast \
+ --i-query nochim_rep-seqs-miller19-97.qza \
+ --i-reference-reads all_sh_refs_qiime_ver7_97_s_10.10.2017.qza \
+ --i-reference-taxonomy all_sh_taxonomy_qiime_ver7_97_s_10.10.2017.qza \
+ --p-perc-identity 0.97 \
+ --output-dir nochim_seqs19_tax
+                     
+
+8. Visualize Data-
+
+qiime metadata tabulate \
+  --m-input-file nonchim_seqs19_tax/classification.qza \
+  --o-visualization nonchim_seqs19_tax/classification.qzv
+
+qiime metadata tabulate \
+ --m-input-file nonchim_seqs19_tax/classification.qza \
+ --m-input-file nonchim_rep-seqs-miller19-97.qza \
+ --o-visualization nonchim19_visualize.qzv
+
+qiime feature-table filter-features \
+  --i-table nonchim_table-miller19-97.qza \
+  --m-metadata-file nonchim_seqs19_tax/classification.qza \
+  --o-filtered-table nonchim_id-filtered19-table.qza
+
+qiime metadata tabulate \
+  --m-input-file nonchim_id-filtered19-table.qza \
+  --o-visualization nonchim_id-filtered19-table.qzv
+
+qiime taxa collapse \
+  --i-table nonchim_id-filtered19-table.qza \
+  --i-taxonomy nonchim_seqs19_tax/classification.qza \
+  --p-level 7 \
+  --output-dir nonchim_taxtable19
+
+qiime metadata tabulate \
+  --m-input-file nonchim_taxtable19/collapsed_table.qza \
+  --o-visualization nonchim_collapsed_table19.qzv
+
+### all_id-filtered-table3.qza= "FeatureTable[Frequency]", format = "BIOMV210DirFmt"
+### taxonomy all_seqs_tax3/classification.qza = "FeatureData[Taxonomy]", format ### = "TSVTaxonomyDirectoryFormat"
+
+qiime feature-table merge \
+  --i-tables nonchim_id-filtered19-table.qza nonchim_taxtable19/collapsed_table.qza \
+  --p-overlap-method error_on_overlapping_feature \
+  --o-merged-table nonchim_OTUs_id-merged-table19.qza
+
+qiime metadata tabulate \
+  --m-input-file nonchim_OTUs_id-merged-table19.qza \
+  --o-visualization nonchim_OTUs_id-merged-table19.qzv
+
+qiime tools export \
+  --input-path nonchim_OTUs_id-merged-table19.qza \
+  --output-path nonchim_OTUs_id-merged19
+
+biom convert \
+ --input-fp nonchim_OTUs_id-merged19/feature-table.biom \
+ --output-fp nonchim_OTUs_merged_table19 \
+ --to-tsv
+
+qiime tools export \
+  --input-path nonchim_id-filtered19-table.qza \
+  --output-path nonchim_exported-id-filtered19-table
+
+biom convert \
+ --input-fp nonchim_exported-id-filtered19-table/feature-table.biom \
+ --output-fp nonchim_id-filtered19-table \
+ --to-tsv
+
+**Use these FASTA files also to BLASTN**
+
+biom convert \
+ --input-fp all_exported-all_table-miller-97/feature-table.biom \
+ --output-fp feature-table \
+ --to-tsv
+
+biom convert \
+ --input-fp dna-sequences.fasta \
+ --output-fp sequences \
+ --to-tsv
+____________________________________________________________________________
+
+### USING BLAST TO ASSIGN UNIDENTIFIED SEQUENCES
+### Download the BLAST+ package-
+
+ncbi-blast-2.10.0+-x64-linux.tar.gz
+Unzip-
+$ gunzip -d ncbi-blast-2.10.0+-x64-linux.tar.gz
+$ tar xvpf ncbi-blast-2.10.0+-x64-linux.tar
+
+### Place BLAST into existing home directory-
+
+sudo mv ~/qiime2-miller/All_Miller_Seqs/all_SRA_seqs_Miller_cutadapt/analysis_all_seqs/ncbi-blast-2.10.0+/bin .  
+
+### Make a new directory for the BLAST databases-
+
+sudo mkdir /home/blastdb
+
+### Download BLAST database- cd /home/blastdb
+
+ftp ftp.ncbi.nlm.nih.gov
+Name (ftp.ncbi.nlm.nih.gov:afletch): anonymous
+##Enter email address as passcode-
+ftp> cd blast/db
+ftp> bin
+ftp> get ITS_RefSeq_Fungi.tar.gz
+ftp> get ITS_eukaryote_sequences.tar.gz
+
+### Use "sudo apt install update blastdb" to update databases regularly
+
+Unzip tar files-
+tar zxvpf ITS_RefSeq_Fungi.tar.gz
+tar zxvpf ITS_eukaryote_sequences.tar.gz
+
+### Convert from tab to fasta
+http://sequenceconversion.bugaco.com/converter/biology/sequences/tab_to_fasta.php
+
+### Running BLAST+ against downloaded databases-
+blastn -help
+
+### Install and update everything you need-
+sudo apt-get update && sudo apt-get -y install python ncbi-blast+
+sudo chmod -R 755 ~/qiime2-miller/All_Miller_Seqs/Miller_Q19_QIIME
+
+conda activate qiime2-2019.10
+cd /home/blastdb
+sudo updatedb
+
+### Run Command line blastn to return a maximum of 5 target sequences. 
+### Run this first for all the returned OTU's and then perform on only the unassigned OTUs. 
+### Use both BLAST databases "ITS_RefSeq_Fungi" and "ITS_eukaryote_sequences". Combine results. 
+
+### Header for .csv file: Query Seq-id; Percentage of identical matches; 
+### Query Coverage Per Subject; Number of mismatches; Number of identical matches; 
+### Alignment length; Query sequence length; Expect value; Bit score; Subject accession; 
+### Subject Taxonomy ID; Subject Scientific Name; Subject Title; Subject Blast Name; Subject Super Kingdom ###   
+
+All OTU Sequences- 
+
+blastn -query /home/blastdb/06042020unidentified_seqs_only.fasta -db ITS_RefSeq_Fungi -out all_OTUs_Fungi.txt -max_target_seqs 5 -outfmt "6 qseqid pident qcovs mismatch nident length qlen evalue bitscore sacc staxid sscinames stitle sblastname sskingdoms" 
+
+Different classifier to run (optional)-
+
+blastn -query /home/blastdb/06042020unidentified_seqs_only.fasta -db ITS_eukaryote_sequences -out all_OTUs_Euks_97match.txt -max_target_seqs 10 -perc_identity 97 -outfmt "6 qseqid pident qcovhsp mismatch nident length qlen evalue bitscore sacc staxid sscinames stitle sskingdoms"
+
+### ONLY Unassigned Sequences
+
+blastn -query /home/blastdb/all_unidentified_fungi_OTUs.fasta -db ITS_RefSeq_Fungi -out all_unidentified_fungal_OTUs_FungiDB_97identity.txt -max_target_seqs 5 -perc_identity 97 -outfmt "6 qseqid pident qcovs mismatch nident length qlen evalue bitscore sacc staxid sscinames stitle sblastname sskingdoms" 
+
+### OPTIONAL ###
+
+Best Hit Algorithm-
+blastn -query /home/blastdb/unassigned_seqs.fasta -db ITS_RefSeq_Fungi -out unknown_OTUs_Fungi_besthit.txt -max_target_seqs 10 -subject_besthit -outfmt "6 qseqid pident qcovhsp mismatch nident length qlen evalue bitscore sacc staxid sscinames stitle sskingdoms" 
+
+Make database from UNITE-
+cd /home/blastdb/sh_general_release_s_10.10.2017
+makeblastdb -dbtype nucl -in sh_general_release_dynamic_s_10.10.2017.fasta -input_type fasta -title UNITE_all_Euks_v7.2 -blastdb_version 5
+
+Taxonomy Dump-
+
+Download taxdump from NCBI-
+cd /home/blastdb
+ftp ftp.ncbi.nlm.nih.gov
+Name (ftp.ncbi.nlm.nih.gov:afletch): anonymous
+
+### Enter email address as passcode-
+ftp> cd pub/taxonomy/new_taxdump
+ftp> get new_taxdump.tar.Z
+tar zxvpf new_taxdump.tar.Z
