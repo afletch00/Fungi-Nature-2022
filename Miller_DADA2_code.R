@@ -20,7 +20,7 @@ BiocManager::install("dada2")
 BiocManager::install("ShortRead")
 BiocManager::install("Biostrings")
 
-# Update and oad required packages, plus any others you may want to use
+# Update and add required packages, plus any others you may want to use
 
 library(dada2)
 packageVersion("dada2")
@@ -80,11 +80,12 @@ rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]),
 
 # NOTE- Miller human ITS data returned 145 seqs w/ fwd and 40 seqs w/ revcomp
 # Skip cutadapt   
+# Filter and trim sequences. Trunclen to truncate sequences where quality significantly drops off
 
 filtFs <- file.path(path, "09132021", basename(fnFs))
 out <- filterAndTrim(fnFs, filtFs, truncQ = 2, maxEE = 5, truncLen = 150, 
-                     rm.phix = TRUE, compress = TRUE, multithread = FALSE
-)  # on windows, set multithread = FALSE
+                     rm.phix = TRUE, compress = TRUE, multithread = FALSE)
+# on windows, set multithread = FALSE
 head(out)
 plotQualityProfile(filtFs[1:18])
 plotQualityProfile(filtFs[28:45])
