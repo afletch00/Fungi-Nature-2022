@@ -1,3 +1,4 @@
+# Read in sample files to make phyloseq object
 
 sample_info<- read.table("pilot_meta.tsv", header=T, row.names=1,
                          check.names=F, sep="\t")
@@ -12,10 +13,13 @@ count_tab <- read.table("coreITS_counts.tsv", header=T,
 ps_all <- phyloseq(otu_table(count_tab, taxa_are_rows=TRUE), sample_data(sample_info), 
                          tax_table(tax_tab))
 
+# check
+
 sample_sums(ps_all)
 tax_table(ps_all)
 sample_data(ps_all)
 
+# Remove taxa not characterized at the kingdome level
 rank_names(ps_all)
 ps_taxa_filt <- subset_taxa(ps_all, !is.na(Kingdom) & !Kingdom %in% c("", "uncharacterized"))
 table(tax_table(ps_all)[, "Kingdom"], exclude = NULL)
@@ -33,33 +37,24 @@ filterDomain = c("Metazoa", "Viridiplantae")
 ps_filtDom = subset_taxa(ps_taxa_filt, !Kingdom %in% filterDomain)
 prevdf1 = subset(prevdf, Kingdom %in% get_taxa_unique(ps_filtDom, "Kingdom"))
 
-plyr::ddply(prevdf1, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})
-filterPhyla = c("unidentified")
-ps_filtPhy = subset_taxa(ps_filtDom, !Phylum %in% filterPhyla)
-prevdf2 = subset(prevdf1, Phylum %in% get_taxa_unique(ps_filtPhy, "Phylum"))
-
-keepTaxa = rownames(prevdf2)
+keepTaxa = rownames(prevdf1)
 ps_filt_2 = prune_taxa(keepTaxa, ps_taxa_filt)
 
-sample_data(ps_filt_2)
-tax_table(ps_filt_2)
-sample_sums(ps_filt_2)
+# Change lowercase u to uppercase in unidentified taxa
+
 tax_table(ps_filt_2)[tax_table(ps_filt_2) == "unidentified"] <- "Unidentified"
 ##################### Subset samples ###########################
 
 ps_sub = ps_filt_2
-sample_data(ps_sub)
-sample_sums(ps_sub)
 sample_data(ps_sub)$Group <- as.factor(sample_data(ps_sub)$Group)
 
-tax_table(ps_sub)
+# Aggregate taxa to Kingdom level and top 10 Genera
+
 ps.dom <- aggregate_taxa(ps_sub, "Kingdom")
 ps.gen10 <- aggregate_top_taxa2(ps_sub, "Genus", top = 10) 
 sample_sums(ps.gen10)
 
-mypal = pal_startrek("uniform", alpha = 1)(7)
-mypal
-#CC0C00FF" "#5C88DAFF" "#84BD00FF" "#FFCD00FF" "#7C878EFF" "#00B5E2FF" "#00AF66FF"
+# Plot read counts (not relative abundance)
 
 plot.composition.COuntAbun <- plot_composition(ps.gen10, group_by = "Kit", 
                                                otu.sort = c("Cladosporium", "Alternaria", "Naganishia", "Rhodosporidiobolus",
@@ -78,6 +73,5 @@ plot.composition.COuntAbun <- plot_composition(ps.gen10, group_by = "Kit",
   facet_grid(~Group, scales = "free", space = "free_x") +
   guides(fill=guide_legend(title="Genera")) +
   theme(legend.text = element_text(colour="black", size = 15, face = "italic")) 
-#plot.composition.COuntAbun$data$Group <- factor(plot.composition.COuntAbun$data$Group, levels = desired_order)
 plot.composition.COuntAbun
 
