@@ -1,3 +1,4 @@
+# read in files to make a phyloseq object
 
 sample_info<- read.table("pilot_meta.tsv", header=T, row.names=1,
                          check.names=F, sep="\t")
@@ -15,6 +16,7 @@ ps_all <- phyloseq(otu_table(count_tab, taxa_are_rows=TRUE), sample_data(sample_
 sample_sums(ps_all)
 tax_table(ps_all)
 
+# Remove taxa not assigned at Kingdom level
 
 rank_names(ps_all)
 ps_taxa_filt <- subset_taxa(ps_all, !is.na(Kingdom) & !Kingdom %in% c("", "uncharacterized"))
@@ -33,42 +35,25 @@ filterDomain = c("Eukaryota")
 ps_filtDom = subset_taxa(ps_taxa_filt, !Kingdom %in% filterDomain)
 prevdf1 = subset(prevdf, Kingdom %in% get_taxa_unique(ps_filtDom, "Kingdom"))
 
-plyr::ddply(prevdf1, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})
-
-keepTaxa = rownames(prevdf1)
+keepTaxa = rownames(prevdf)
 ps_filt_2 = prune_taxa(keepTaxa, ps_taxa_filt)
+
+# double check
 
 sample_data(ps_filt_2)
 tax_table(ps_filt_2)
 
-##################### Subset samples ###########################
-
 ps_16S = ps_filt_2
-sample_data(ps_16S)
-sample_sums(ps_16S)
 sample_data(ps_16S)$Group <- as.factor(sample_data(ps_sub)$Group)
 
+# Aggregate taxa to kingdom level and top Grnera
 
-tax_table(ps_16S)
 ps.dom <- aggregate_taxa(ps_16S, "Kingdom")
-ps.gen <-
 ps.gen10 <- aggregate_top_taxa2(ps_16S, "Genus", top = 10) 
-sample_sums(ps.gen10)
-tax_table(ps.gen10)
-
-mypal = pal_startrek_adaptive("uniform", alpha = 1)(11)
-mypal
-"#CC0C00FF" "#885682FF" "#6492AEFF" "#7CB22BFF" "#B5C300FF" "#FFCD00FF" "#B0A255FF" "#63909EFF"
-"#18ABD1FF" "#00B2B0FF" "#00AF66FF"
-
-ps.gen.rel <- microbiome::transform(ps.gen10, "compositional")
-tax_table(ps.gen.rel)
-
-ps_samples <- subset_samples(ps_16S, Group1 %in% c("Benign Cyst Fluid", "IPMN Cyst Fluid", "PDAC Pancreas",
-                                                   "IPMN Pancreas", "PDAC Pancreas"))
-ps.gen10 <- aggregate_top_taxa2(ps_samples, "Genus", top = 10) 
-tax_table(ps.gen10)
 ps.gen10 <- subset_taxa(ps.gen10, !(Genus == "hgcI clade"))
+
+# Transform to relative abundance and make composition plots.
+
 ps.gen.rel <- microbiome::transform(ps.gen10, "compositional")
 
 plot.composition.COuntAbun <- plot_composition(ps.gen.rel, group_by = "Group1", 
@@ -89,6 +74,5 @@ plot.composition.COuntAbun <- plot_composition(ps.gen.rel, group_by = "Group1",
   facet_grid(~Group, scales = "free", space = "free_x") +
   theme(legend.text = element_text(colour="black", size = 15, face = "italic")) +
   guides(fill=guide_legend(title="Genera"))
-#plot.composition.COuntAbun$data$Group <- factor(plot.composition.COuntAbun$data$Group, levels = desired_order)
 plot.composition.COuntAbun
 
