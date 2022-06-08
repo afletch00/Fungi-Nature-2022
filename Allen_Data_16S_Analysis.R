@@ -46,7 +46,7 @@ tax_table(ps_filt_2)
 ps_16S = ps_filt_2
 sample_data(ps_16S)$Group <- as.factor(sample_data(ps_sub)$Group)
 
-# Aggregate taxa to kingdom level and top Grnera
+# Aggregate taxa to kingdom level and top Genera
 
 ps.dom <- aggregate_taxa(ps_16S, "Kingdom")
 ps.gen10 <- aggregate_top_taxa2(ps_16S, "Genus", top = 10) 
