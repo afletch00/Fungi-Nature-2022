@@ -43,7 +43,7 @@ ps_filt_2 = prune_taxa(keepTaxa, ps_taxa_filt)
 # Change lowercase u to uppercase in unidentified taxa
 
 tax_table(ps_filt_2)[tax_table(ps_filt_2) == "unidentified"] <- "Unidentified"
-##################### Subset samples ###########################
+
 
 ps_sub = ps_filt_2
 sample_data(ps_sub)$Group <- as.factor(sample_data(ps_sub)$Group)
